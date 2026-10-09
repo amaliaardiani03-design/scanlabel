@@ -134,7 +134,8 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
       </table>
     </div>
     <div class="actions">
-      <button type="button" class="primary" id="btnCsv">Unduh CSV</button>
+      <button type="button" class="primary" id="btnPng">Unduh gambar (PNG)</button>
+      <button type="button" id="btnCsv">Unduh CSV</button>
       <button type="button" id="btnCopy">Salin (tempel ke Excel)</button>
       <button type="button" class="quiet" id="btnBack">Scan lagi</button>
     </div>
@@ -348,20 +349,63 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   }
   function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
   function buildRows() { return generated.map(function (it, i) { return [i + 1, it.code, prodDate(it.code), fmtTime(it.ts)]; }); }
-  async function saveCsv() {
-    var head = ['No', 'Kode', 'Tanggal Produksi (dari kode)', 'Waktu Scan'];
-    var text = '﻿' + [head].concat(buildRows()).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
-    var d = new Date(), name = 'scan-label-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.csv';
+  function stamp() { var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
+  async function saveFile(name, data, mime) {
     try {
       if (window.claude && window.claude.use) {
         var dl = await window.claude.use('downloads');
-        if (dl) { await dl.save({ filename: name, data: text }); return; }
+        if (dl) { await dl.save({ filename: name, data: data }); return; }
       }
     } catch (e) { if (e && e.code === 'declined') return; }
     try {
-      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })); a.download = name;
+      var blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
-    } catch (e) { toast('Unduhan tidak tersedia. Pakai tombol Salin lalu tempel ke Excel.', 'err'); }
+    } catch (e) { toast('Unduhan tidak tersedia di sini. Pakai tombol Salin, atau screenshot tabel.', 'err'); }
+  }
+  async function saveCsv() {
+    var head = ['No', 'Kode', 'Tanggal Produksi (dari kode)', 'Waktu Scan'];
+    var text = '﻿' + [head].concat(buildRows()).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+    await saveFile('scan-label-' + stamp() + '.csv', text, 'text/csv;charset=utf-8');
+  }
+
+  // Gambar PNG selalu terang (putih) supaya mudah dibagikan lewat WhatsApp atau dicetak.
+  async function savePng() {
+    if (!generated.length) return;
+    try { await Promise.all([document.fonts.load('700 28px "Barlow Condensed"'), document.fonts.load('600 18px "IBM Plex Mono"'), document.fonts.load('400 16px "Barlow"')]); } catch (e) {}
+    var rows = buildRows();
+    var W = 1000, pad0 = 32, headH = 96, thH = 46, rowH = 46, footH = 70;
+    var H = headH + thH + rows.length * rowH + footH;
+    var scale = Math.min(2, 16000 / H);
+    var cv = document.createElement('canvas'); cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
+    var c = cv.getContext('2d'); c.scale(scale, scale);
+    var SANS = '"Barlow", Arial, sans-serif', COND = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif', MONO = '"IBM Plex Mono", Consolas, monospace';
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#0d1117'; c.textBaseline = 'alphabetic';
+    c.font = '700 34px ' + COND; c.fillText('DAFTAR HASIL SCAN LABEL', pad0, 52);
+    c.font = '400 16px ' + SANS; c.fillStyle = '#5b6573';
+    c.fillText(rows.length + ' kode  ·  dibuat ' + fmtTime(Date.now()), pad0, 78);
+    c.fillStyle = '#0d1117'; c.fillRect(pad0, headH - 6, W - pad0 * 2, 3);
+    var X = [pad0 + 10, pad0 + 80, pad0 + 480, pad0 + 700];
+    c.fillStyle = '#f3f5f8'; c.fillRect(pad0, headH, W - pad0 * 2, thH);
+    c.fillStyle = '#0d1117'; c.font = '700 17px ' + COND;
+    ['NO', 'KODE', 'TGL PRODUKSI (DARI KODE)', 'WAKTU SCAN'].forEach(function (t, i) { c.fillText(t, X[i], headH + 30); });
+    c.fillRect(pad0, headH + thH - 2, W - pad0 * 2, 2);
+    rows.forEach(function (r, i) {
+      var y = headH + thH + i * rowH;
+      c.fillStyle = '#d5dae1'; c.fillRect(pad0, y + rowH - 1, W - pad0 * 2, 1);
+      c.fillStyle = '#5b6573'; c.font = '600 18px ' + SANS; c.fillText(String(r[0]), X[0], y + 30);
+      c.fillStyle = '#0d1117'; c.font = '600 18px ' + MONO;
+      var code = String(r[1]), maxW = X[2] - X[1] - 16;
+      while (code.length > 4 && c.measureText(code).width > maxW) code = code.slice(0, -2);
+      if (code !== String(r[1])) code = code.slice(0, -1) + '…';
+      c.fillText(code, X[1], y + 30);
+      c.font = '400 17px ' + SANS; c.fillText(r[2], X[2], y + 30); c.fillText(r[3], X[3], y + 30);
+    });
+    c.fillStyle = '#1d4ed8'; c.fillRect(pad0, H - footH + 22, W - pad0 * 2, 10);
+    var blob = await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
+    if (!blob) { toast('Gagal membuat gambar. Coba lagi atau pakai Unduh CSV.', 'err'); return; }
+    await saveFile('scan-label-' + stamp() + '.png', blob, 'image/png');
   }
   async function copyList() {
     var tsv = [['No', 'Kode', 'Tanggal Produksi', 'Waktu Scan']].concat(buildRows()).map(function (r) { return r.join('\t'); }).join('\n');
@@ -383,6 +427,7 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   $('manualForm').addEventListener('submit', function (e) { e.preventDefault(); var i = $('manualIn'); if (addCode(i.value)) { i.value = ''; } i.focus(); });
   $('btnGen').addEventListener('click', generate);
   $('btnCsv').addEventListener('click', saveCsv);
+  $('btnPng').addEventListener('click', savePng);
   $('btnCopy').addEventListener('click', copyList);
   $('btnBack').addEventListener('click', function () { $('result').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); });
   var armClear = false;
