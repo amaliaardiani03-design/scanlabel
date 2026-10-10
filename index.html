@@ -1,4 +1,14 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d4ed8">
 <title>Scan Label Produksi</title>
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <style>
@@ -85,6 +95,43 @@ td.num, th.num { font-variant-numeric: tabular-nums; width: 3rem; }
 td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .result .actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-top: 2px solid var(--ink); }
 .band { height: 10px; background: var(--accent); margin-top: 32px; }
+body { margin: 0; }
+label.lbl { display: block; font-family: var(--font-display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+.gnote { display: block; width: 100%; font: inherit; padding: 10px 12px; min-height: 76px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); resize: vertical; }
+.gnote:focus-visible, .rnote:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rnote { display: block; width: 100%; margin-top: 8px; font: inherit; font-size: .92rem; padding: 8px 10px; min-height: 40px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+.gres { margin: 0; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
+.gres[hidden] { display: none; }
+a.btnlike { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font: inherit; font-weight: 600; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); padding: 9px 14px; min-height: 42px; }
+a.btnlike:hover { background: var(--panel); }
+a.btnlike:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wa { background: var(--pass); border-color: var(--pass); color: var(--accent-ink); }
+.wa:hover { background: var(--pass); filter: brightness(1.08); }
+td.cnote { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  header { padding-block: 14px 10px; }
+  h1 { font-size: 1.55rem; }
+  .sub { font-size: .8rem; }
+  button, a.btnlike { min-height: 48px; }
+  .modes { grid-template-columns: 1fr 1fr; }
+  .modes #btnShot { grid-column: 1 / -1; min-height: 58px; font-size: 1.05rem; }
+  .manual { flex-direction: column; }
+  .manual button { width: 100%; }
+  .row { grid-template-columns: 1.8rem minmax(0, 1fr) auto; gap: 8px; }
+  .row .code { font-size: .92rem; }
+  .row button { min-height: 40px; }
+  .tablebox { overflow: visible; }
+  table, thead, tbody, tr, td { display: block; min-width: 0; width: 100%; }
+  thead { display: none; }
+  tr { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  td { display: flex; gap: 10px; border: 0; padding: 2px 0; }
+  td::before { content: attr(data-l); flex: 0 0 5.2rem; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; padding-top: .2em; }
+  td.num, th.num { width: auto; }
+  td.mono { font-size: .95rem; }
+  .result .actions { flex-direction: column; }
+  .result .actions button, .result .actions a { width: 100%; }
+}
 @media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
 </style>
 
@@ -125,16 +172,25 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
     <div class="list" id="list"></div>
   </section>
 
+  <section aria-labelledby="h-note">
+    <h2 id="h-note">Catatan umum</h2>
+    <textarea id="gnote" class="gnote" maxlength="500" placeholder="Contoh: Shift 1, gudang barang jadi, diperiksa oleh Fauzan" aria-label="Catatan umum"></textarea>
+    <p class="hint">Catatan ini ikut tampil di daftar, gambar, dan pesan WhatsApp. Catatan per kode bisa diisi langsung di antrean scan.</p>
+  </section>
+
   <section class="result" id="result" hidden aria-labelledby="h-res">
     <div class="head"><strong id="h-res">Daftar hasil scan</strong><span id="resMeta"></span></div>
+    <p class="gres" id="resNote" hidden></p>
     <div class="tablebox">
       <table>
-        <thead><tr><th class="num">No</th><th>Kode</th><th>Tgl produksi (dari kode)</th><th>Waktu scan</th></tr></thead>
+        <thead><tr><th class="num">No</th><th>Kode</th><th>Tgl produksi (dari kode)</th><th>Waktu scan</th><th>Catatan</th></tr></thead>
         <tbody id="resBody"></tbody>
       </table>
     </div>
     <div class="actions">
-      <button type="button" class="primary" id="btnPng">Unduh gambar (PNG)</button>
+      <button type="button" class="primary wa" id="btnShareImg">Kirim gambar ke WhatsApp</button>
+      <a class="btnlike" id="btnWaText" href="#" target="_blank" rel="noopener">Kirim teks ke WhatsApp</a>
+      <button type="button" id="btnPng">Unduh gambar (PNG)</button>
       <button type="button" id="btnCsv">Unduh CSV</button>
       <button type="button" id="btnCopy">Salin (tempel ke Excel)</button>
       <button type="button" class="quiet" id="btnBack">Scan lagi</button>
@@ -152,6 +208,7 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   var $ = function (id) { return document.getElementById(id); };
   var items = [];
   var nextId = 1;
+  var gnote = '';
   var stream = null, scanning = false, detector = null, canvasEl = document.createElement('canvas');
   var lastDupToast = {}, audioCtx = null;
   var STORE = 'scan-label-items-v1';
@@ -169,9 +226,9 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
     return '-';
   }
 
-  function save() { try { localStorage.setItem(STORE, JSON.stringify({ items: items, nextId: nextId })); } catch (e) {} }
+  function save() { try { localStorage.setItem(STORE, JSON.stringify({ items: items, nextId: nextId, gnote: gnote })); } catch (e) {} }
   function load() {
-    try { var s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && Array.isArray(s.items)) { items = s.items; nextId = s.nextId || items.length + 1; } } catch (e) {}
+    try { var s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && Array.isArray(s.items)) { items = s.items; nextId = s.nextId || items.length + 1; gnote = typeof s.gnote === 'string' ? s.gnote : ''; } } catch (e) {}
   }
 
   function toast(msg, kind) { var t = $('toast'); t.textContent = msg; t.className = 'toast ' + (kind || ''); }
@@ -197,7 +254,7 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
         return false;
       }
     }
-    items.push({ id: nextId++, code: code, ts: Date.now() });
+    items.push({ id: nextId++, code: code, ts: Date.now(), note: '' });
     save(); render(items.length - 1);
     toast('Tersimpan: ' + code, 'ok'); beep();
     return true;
@@ -220,7 +277,10 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
       var mid = document.createElement('div');
       var c = document.createElement('div'); c.className = 'code'; c.textContent = it.code;
       var m = document.createElement('div'); m.className = 'meta'; m.textContent = fmtTime(it.ts);
-      mid.appendChild(c); mid.appendChild(m);
+      var ni = document.createElement('input'); ni.type = 'text'; ni.id = 'note-' + it.id; ni.className = 'rnote'; ni.maxLength = 200;
+      ni.placeholder = 'Catatan (opsional)'; ni.value = it.note || ''; ni.setAttribute('aria-label', 'Catatan untuk ' + it.code);
+      ni.addEventListener('input', function () { it.note = ni.value; save(); });
+      mid.appendChild(c); mid.appendChild(m); mid.appendChild(ni);
       var del = document.createElement('button'); del.type = 'button'; del.textContent = 'Hapus'; del.setAttribute('aria-label', 'Hapus ' + it.code);
       del.addEventListener('click', function () { items = items.filter(function (x) { return x.id !== it.id; }); save(); render(); $('result').hidden = true; });
       row.appendChild(no); row.appendChild(mid); row.appendChild(del);
@@ -331,24 +391,27 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   }
 
   /* ---------- generate & export ---------- */
-  var generated = [];
+  var generated = [], genNote = '', genTime = 0, pngPromise = null;
   function generate() {
     if (!items.length) return;
-    generated = items.slice();
+    generated = JSON.parse(JSON.stringify(items)); genNote = gnote.trim(); genTime = Date.now();
     var body = $('resBody'); body.textContent = '';
     generated.forEach(function (it, i) {
       var tr = document.createElement('tr');
-      [[i + 1, 'num'], [it.code, 'mono'], [prodDate(it.code), 'time'], [fmtTime(it.ts), 'time']].forEach(function (c) {
-        var td = document.createElement('td'); td.className = c[1]; td.textContent = c[0]; tr.appendChild(td);
+      [[i + 1, 'num', 'No'], [it.code, 'mono', 'Kode'], [prodDate(it.code), 'time', 'Tgl prod.'], [fmtTime(it.ts), 'time', 'Waktu scan'], [it.note || '-', 'cnote', 'Catatan']].forEach(function (c) {
+        var td = document.createElement('td'); td.className = c[1]; td.setAttribute('data-l', c[2]); td.textContent = c[0]; tr.appendChild(td);
       });
       body.appendChild(tr);
     });
-    $('resMeta').textContent = generated.length + ' kode · dibuat ' + fmtTime(Date.now());
+    $('resMeta').textContent = generated.length + ' kode · dibuat ' + fmtTime(genTime);
+    var rn = $('resNote'); rn.textContent = genNote ? 'Catatan: ' + genNote : ''; rn.hidden = !genNote;
+    $('btnWaText').href = 'https://wa.me/?text=' + encodeURIComponent(buildText());
+    pngPromise = makePng().catch(function () { return null; });
     $('result').hidden = false;
     $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-  function buildRows() { return generated.map(function (it, i) { return [i + 1, it.code, prodDate(it.code), fmtTime(it.ts)]; }); }
+  function buildRows() { return generated.map(function (it, i) { return [i + 1, it.code, prodDate(it.code), fmtTime(it.ts), it.note || '']; }); }
   function stamp() { var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
   async function saveFile(name, data, mime) {
     try {
@@ -364,51 +427,113 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
     } catch (e) { toast('Unduhan tidak tersedia di sini. Pakai tombol Salin, atau screenshot tabel.', 'err'); }
   }
   async function saveCsv() {
-    var head = ['No', 'Kode', 'Tanggal Produksi (dari kode)', 'Waktu Scan'];
-    var text = '﻿' + [head].concat(buildRows()).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+    var head = ['No', 'Kode', 'Tanggal Produksi (dari kode)', 'Waktu Scan', 'Catatan'];
+    var top = genNote ? [['Catatan umum', genNote], []] : [];
+    var text = '\ufeff' + top.concat([head], buildRows()).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
     await saveFile('scan-label-' + stamp() + '.csv', text, 'text/csv;charset=utf-8');
   }
 
+  function buildText() {
+    var L = ['*DAFTAR HASIL SCAN LABEL*', 'Dibuat: ' + fmtTime(genTime), 'Total: ' + generated.length + ' kode'];
+    if (genNote) L.push('Catatan: ' + genNote);
+    L.push('');
+    buildRows().forEach(function (r) {
+      L.push(r[0] + '. ' + r[1] + (r[2] !== '-' ? ' (prod ' + r[2] + ')' : '') + (r[4] ? ' - ' + r[4] : ''));
+    });
+    return L.join('\n');
+  }
+
   // Gambar PNG selalu terang (putih) supaya mudah dibagikan lewat WhatsApp atau dicetak.
-  async function savePng() {
-    if (!generated.length) return;
+  async function makePng() {
     try { await Promise.all([document.fonts.load('700 28px "Barlow Condensed"'), document.fonts.load('600 18px "IBM Plex Mono"'), document.fonts.load('400 16px "Barlow"')]); } catch (e) {}
     var rows = buildRows();
-    var W = 1000, pad0 = 32, headH = 96, thH = 46, rowH = 46, footH = 70;
-    var H = headH + thH + rows.length * rowH + footH;
+    var W = 1100, P = 32, thH = 46, footH = 70;
+    var SANS = '"Barlow", Arial, sans-serif', COND = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif', MONO = '"IBM Plex Mono", Consolas, monospace';
+    var X = [P + 10, P + 68, P + 390, P + 550, P + 750];
+    var m = document.createElement('canvas').getContext('2d');
+    function wrap(text, maxW, maxLines) {
+      var out = [], words = String(text).split(/\s+/), line = '';
+      for (var i = 0; i < words.length; i++) {
+        var w = words[i]; if (!w) continue;
+        var t = line ? line + ' ' + w : w;
+        if (m.measureText(t).width <= maxW) { line = t; continue; }
+        if (line) { out.push(line); line = ''; }
+        while (m.measureText(w).width > maxW && w.length > 1) {
+          var k = w.length; while (k > 1 && m.measureText(w.slice(0, k)).width > maxW) k--;
+          out.push(w.slice(0, k)); w = w.slice(k);
+        }
+        line = w;
+      }
+      if (line) out.push(line);
+      if (out.length > maxLines) {
+        out = out.slice(0, maxLines); var l = out[maxLines - 1];
+        while (l.length > 1 && m.measureText(l + '…').width > maxW) l = l.slice(0, -1);
+        out[maxLines - 1] = l + '…';
+      }
+      return out;
+    }
+    m.font = '400 17px ' + SANS;
+    var gl = genNote ? wrap(genNote, W - P * 2, 4) : [];
+    var noteLines = rows.map(function (r) { return r[4] ? wrap(r[4], W - P - X[4] - 8, 3) : []; });
+    m.font = '600 18px ' + MONO;
+    var codeLines = rows.map(function (r) { return wrap(r[1], X[2] - X[1] - 16, 2); });
+    var rowHs = rows.map(function (r, i) { return Math.max(46, 24 + Math.max(1, codeLines[i].length, noteLines[i].length) * 22); });
+    var headH = 96 + (gl.length ? gl.length * 24 + 10 : 0);
+    var H = headH + thH + rowHs.reduce(function (a, b) { return a + b; }, 0) + footH;
     var scale = Math.min(2, 16000 / H);
     var cv = document.createElement('canvas'); cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
-    var c = cv.getContext('2d'); c.scale(scale, scale);
-    var SANS = '"Barlow", Arial, sans-serif', COND = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif', MONO = '"IBM Plex Mono", Consolas, monospace';
+    var c = cv.getContext('2d'); c.scale(scale, scale); c.textBaseline = 'alphabetic';
     c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
-    c.fillStyle = '#0d1117'; c.textBaseline = 'alphabetic';
-    c.font = '700 34px ' + COND; c.fillText('DAFTAR HASIL SCAN LABEL', pad0, 52);
+    c.fillStyle = '#0d1117'; c.font = '700 34px ' + COND; c.fillText('DAFTAR HASIL SCAN LABEL', P, 52);
     c.font = '400 16px ' + SANS; c.fillStyle = '#5b6573';
-    c.fillText(rows.length + ' kode  ·  dibuat ' + fmtTime(Date.now()), pad0, 78);
-    c.fillStyle = '#0d1117'; c.fillRect(pad0, headH - 6, W - pad0 * 2, 3);
-    var X = [pad0 + 10, pad0 + 80, pad0 + 480, pad0 + 700];
-    c.fillStyle = '#f3f5f8'; c.fillRect(pad0, headH, W - pad0 * 2, thH);
+    c.fillText(rows.length + ' kode  ·  dibuat ' + fmtTime(genTime), P, 78);
+    c.fillStyle = '#0d1117'; c.font = '400 17px ' + SANS;
+    gl.forEach(function (t, i) { c.fillText(t, P, 104 + i * 24); });
+    c.fillRect(P, headH - 6, W - P * 2, 3);
+    c.fillStyle = '#f3f5f8'; c.fillRect(P, headH, W - P * 2, thH);
     c.fillStyle = '#0d1117'; c.font = '700 17px ' + COND;
-    ['NO', 'KODE', 'TGL PRODUKSI (DARI KODE)', 'WAKTU SCAN'].forEach(function (t, i) { c.fillText(t, X[i], headH + 30); });
-    c.fillRect(pad0, headH + thH - 2, W - pad0 * 2, 2);
+    ['NO', 'KODE', 'TGL PRODUKSI', 'WAKTU SCAN', 'CATATAN'].forEach(function (t, i) { c.fillText(t, X[i], headH + 30); });
+    c.fillRect(P, headH + thH - 2, W - P * 2, 2);
+    var y = headH + thH;
     rows.forEach(function (r, i) {
-      var y = headH + thH + i * rowH;
-      c.fillStyle = '#d5dae1'; c.fillRect(pad0, y + rowH - 1, W - pad0 * 2, 1);
+      c.fillStyle = '#d5dae1'; c.fillRect(P, y + rowHs[i] - 1, W - P * 2, 1);
       c.fillStyle = '#5b6573'; c.font = '600 18px ' + SANS; c.fillText(String(r[0]), X[0], y + 30);
       c.fillStyle = '#0d1117'; c.font = '600 18px ' + MONO;
-      var code = String(r[1]), maxW = X[2] - X[1] - 16;
-      while (code.length > 4 && c.measureText(code).width > maxW) code = code.slice(0, -2);
-      if (code !== String(r[1])) code = code.slice(0, -1) + '…';
-      c.fillText(code, X[1], y + 30);
+      codeLines[i].forEach(function (t, k) { c.fillText(t, X[1], y + 30 + k * 22); });
       c.font = '400 17px ' + SANS; c.fillText(r[2], X[2], y + 30); c.fillText(r[3], X[3], y + 30);
+      noteLines[i].forEach(function (t, k) { c.fillText(t, X[4], y + 30 + k * 22); });
+      y += rowHs[i];
     });
-    c.fillStyle = '#1d4ed8'; c.fillRect(pad0, H - footH + 22, W - pad0 * 2, 10);
-    var blob = await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
-    if (!blob) { toast('Gagal membuat gambar. Coba lagi atau pakai Unduh CSV.', 'err'); return; }
+    c.fillStyle = '#1d4ed8'; c.fillRect(P, H - footH + 22, W - P * 2, 10);
+    return await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
+  }
+  async function getPng() {
+    var blob = null;
+    try { blob = await (pngPromise || makePng()); } catch (e) {}
+    if (!blob) toast('Gagal membuat gambar. Coba lagi atau pakai Unduh CSV.', 'err');
+    return blob;
+  }
+  async function savePng() {
+    if (!generated.length) return;
+    var blob = await getPng(); if (!blob) return;
     await saveFile('scan-label-' + stamp() + '.png', blob, 'image/png');
   }
+  async function shareImage() {
+    if (!generated.length) return;
+    var blob = await getPng(); if (!blob) return;
+    var name = 'scan-label-' + stamp() + '.png';
+    try {
+      var file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: 'Daftar hasil scan label (' + generated.length + ' kode)' });
+        return;
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    await saveFile(name, blob, 'image/png');
+    toast('Gambar diunduh. Buka WhatsApp, pilih grup, lalu lampirkan gambar dari galeri. Atau pakai tombol Kirim teks.', 'ok');
+  }
   async function copyList() {
-    var tsv = [['No', 'Kode', 'Tanggal Produksi', 'Waktu Scan']].concat(buildRows()).map(function (r) { return r.join('\t'); }).join('\n');
+    var tsv = [['No', 'Kode', 'Tanggal Produksi', 'Waktu Scan', 'Catatan']].concat(buildRows()).map(function (r) { return r.join('\t'); }).join('\n');
     try { await navigator.clipboard.writeText(tsv); toast('Daftar disalin. Tempel di Excel atau Sheets.', 'ok'); }
     catch (e) {
       var ta = document.createElement('textarea'); ta.value = tsv; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
@@ -428,6 +553,8 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   $('btnGen').addEventListener('click', generate);
   $('btnCsv').addEventListener('click', saveCsv);
   $('btnPng').addEventListener('click', savePng);
+  $('btnShareImg').addEventListener('click', shareImage);
+  $('gnote').addEventListener('input', function (e) { gnote = e.target.value; save(); });
   $('btnCopy').addEventListener('click', copyList);
   $('btnBack').addEventListener('click', function () { $('result').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); });
   var armClear = false;
@@ -439,6 +566,9 @@ td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
   });
   window.addEventListener('pagehide', stopCam);
 
-  load(); render();
+  load(); $('gnote').value = gnote; render();
 })();
 </script>
+
+</body>
+</html>
