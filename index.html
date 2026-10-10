@@ -1,0 +1,444 @@
+<title>Scan Label Produksi</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<style>
+/* Layout: satu kolom kerja seperti lembar label — header bergaris tebal, panel scan, antrean kode, bilah Generate di bawah, hasil muncul di bawah antrean. */
+:root {
+  --paper: #ffffff;
+  --panel: #f3f5f8;
+  --ink: #0d1117;
+  --muted: #5b6573;
+  --line: #d5dae1;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --pass: #138a3d;
+  --warn: #b45309;
+  --bad: #c0262d;
+  --font-display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1318; --panel: #181e26; --ink: #eef1f5; --muted: #98a2b0; --line: #2b3440;
+    --accent: #6d97ff; --accent-ink: #0b1220; --pass: #3fcf73; --warn: #f0a548; --bad: #ff7b80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1318; --panel: #181e26; --ink: #eef1f5; --muted: #98a2b0; --line: #2b3440;
+  --accent: #6d97ff; --accent-ink: #0b1220; --pass: #3fcf73; --warn: #f0a548; --bad: #ff7b80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; padding-inline: 16px; padding-block: 0 96px; }
+.wrap { max-width: 760px; margin-inline: auto; }
+header { border-bottom: 3px solid var(--ink); padding-block: 18px 12px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 2rem; letter-spacing: .02em; text-transform: uppercase; margin: 0; line-height: 1; text-wrap: balance; }
+.sub { color: var(--muted); font-size: .85rem; margin: 6px 0 0; }
+.count { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; letter-spacing: .06em; text-transform: uppercase; background: var(--ink); color: var(--paper); padding: 4px 10px; font-variant-numeric: tabular-nums; }
+section { margin-top: 22px; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+button { font: inherit; cursor: pointer; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); padding: 9px 14px; min-height: 42px; font-weight: 600; }
+button:hover { background: var(--panel); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.primary:hover { filter: brightness(1.08); }
+button.quiet { border-color: var(--line); font-weight: 500; }
+button[disabled] { opacity: .45; cursor: not-allowed; }
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage { margin-top: 12px; background: #000; position: relative; aspect-ratio: 4 / 3; max-width: 100%; display: none; overflow: hidden; }
+.stage.on { display: block; }
+.stage video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stage .frame { position: absolute; inset: 14% 14%; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
+.stage .stop { position: absolute; right: 8px; top: 8px; background: rgba(0,0,0,.65); color: #fff; border-color: #fff; min-height: 36px; padding: 6px 12px; }
+.note { margin: 10px 0 0; padding: 10px 12px; background: var(--panel); border-left: 4px solid var(--warn); font-size: .9rem; }
+.note[hidden] { display: none; }
+.manual { margin-top: 12px; display: flex; gap: 8px; }
+.manual input { flex: 1; min-width: 0; font: inherit; font-family: var(--font-mono); padding: 9px 12px; min-height: 42px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); }
+.hint { color: var(--muted); font-size: .82rem; margin: 6px 0 0; }
+.toast { margin-top: 12px; min-height: 22px; font-size: .92rem; font-weight: 600; }
+.toast.ok { color: var(--pass); } .toast.dup { color: var(--warn); } .toast.err { color: var(--bad); }
+.list { border-top: 2px solid var(--ink); }
+.row { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.row .no { font-family: var(--font-display); font-weight: 700; font-size: 1.2rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .code { font-family: var(--font-mono); font-weight: 600; font-size: .98rem; overflow-wrap: anywhere; }
+.row .meta { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.row button { min-height: 34px; padding: 4px 10px; border-color: var(--line); color: var(--muted); font-weight: 500; }
+.row.fresh { animation: fresh 1.1s ease-out; }
+@keyframes fresh { from { background: color-mix(in srgb, var(--pass) 22%, transparent); } to { background: transparent; } }
+.empty { padding: 22px 0; color: var(--muted); border-bottom: 1px solid var(--line); }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--paper); border-top: 3px solid var(--ink); padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; }
+.bar .in { max-width: 760px; margin-inline: auto; display: flex; gap: 8px; }
+.bar .primary { flex: 1; font-family: var(--font-display); font-size: 1.2rem; letter-spacing: .08em; text-transform: uppercase; min-height: 48px; }
+.result { margin-top: 28px; border: 2px solid var(--ink); }
+.result[hidden] { display: none; }
+.result .head { background: var(--ink); color: var(--paper); padding: 10px 14px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; align-items: baseline; }
+.result .head strong { font-family: var(--font-display); font-size: 1.3rem; letter-spacing: .08em; text-transform: uppercase; }
+.result .head span { font-size: .85rem; opacity: .85; }
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 480px; }
+th { text-align: left; font-family: var(--font-display); letter-spacing: .08em; text-transform: uppercase; font-size: .95rem; padding: 8px 12px; border-bottom: 2px solid var(--ink); background: var(--panel); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.mono { font-family: var(--font-mono); font-weight: 600; overflow-wrap: anywhere; }
+td.num, th.num { font-variant-numeric: tabular-nums; width: 3rem; }
+td.time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.result .actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-top: 2px solid var(--ink); }
+.band { height: 10px; background: var(--accent); margin-top: 32px; }
+@media (prefers-reduced-motion: reduce) { .row.fresh { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Scan Label Produksi</h1>
+      <p class="sub">Scan banyak label, lalu generate daftarnya.</p>
+    </div>
+    <div class="count" id="count">0 kode</div>
+  </header>
+
+  <section aria-labelledby="h-scan">
+    <h2 id="h-scan">Scan</h2>
+    <div class="modes">
+      <button type="button" class="primary" id="btnShot">Ambil foto label</button>
+      <button type="button" id="btnCam">Kamera langsung</button>
+      <button type="button" id="btnPhoto">Pilih dari galeri</button>
+    </div>
+    <input type="file" id="shotIn" accept="image/*" capture="environment" hidden>
+    <input type="file" id="fileIn" accept="image/*" multiple hidden>
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted></video>
+      <div class="frame"></div>
+      <button type="button" class="stop" id="btnStop">Matikan kamera</button>
+    </div>
+    <p class="note" id="note" hidden></p>
+    <form class="manual" id="manualForm" autocomplete="off">
+      <input id="manualIn" inputmode="text" placeholder="Ketik kode, atau pakai scanner barcode USB" aria-label="Kode manual">
+      <button type="submit">Tambah</button>
+    </form>
+    <p class="hint">Scanner barcode USB mengetik kode lalu Enter, jadi bisa langsung dipakai di kolom ini.</p>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="h-list">
+    <h2 id="h-list"><span>Antrean scan</span><button type="button" class="quiet" id="btnClear">Kosongkan</button></h2>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section class="result" id="result" hidden aria-labelledby="h-res">
+    <div class="head"><strong id="h-res">Daftar hasil scan</strong><span id="resMeta"></span></div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th class="num">No</th><th>Kode</th><th>Tgl produksi (dari kode)</th><th>Waktu scan</th></tr></thead>
+        <tbody id="resBody"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="btnPng">Unduh gambar (PNG)</button>
+      <button type="button" id="btnCsv">Unduh CSV</button>
+      <button type="button" id="btnCopy">Salin (tempel ke Excel)</button>
+      <button type="button" class="quiet" id="btnBack">Scan lagi</button>
+    </div>
+  </section>
+  <div class="band"></div>
+</div>
+
+<div class="bar"><div class="in">
+  <button type="button" class="primary" id="btnGen" disabled>Generate daftar</button>
+</div></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var items = [];
+  var nextId = 1;
+  var stream = null, scanning = false, detector = null, canvasEl = document.createElement('canvas');
+  var lastDupToast = {}, audioCtx = null;
+  var STORE = 'scan-label-items-v1';
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtTime(t) { var d = new Date(t); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+
+  // Kode label contoh: GM2-2-0078-261002-1-2. Segmen ke-4 (261002) cocok dengan tanggal produksi 02/10/2026 (YYMMDD).
+  function prodDate(code) {
+    var seg = code.split('-');
+    for (var i = 0; i < seg.length; i++) {
+      var m = /^(\d{2})(\d{2})(\d{2})$/.exec(seg[i]);
+      if (m && +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31) return m[3] + '/' + m[2] + '/20' + m[1];
+    }
+    return '-';
+  }
+
+  function save() { try { localStorage.setItem(STORE, JSON.stringify({ items: items, nextId: nextId })); } catch (e) {} }
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(STORE) || 'null'); if (s && Array.isArray(s.items)) { items = s.items; nextId = s.nextId || items.length + 1; } } catch (e) {}
+  }
+
+  function toast(msg, kind) { var t = $('toast'); t.textContent = msg; t.className = 'toast ' + (kind || ''); }
+  function note(msg) { var n = $('note'); if (msg) { n.textContent = msg; n.hidden = false; } else { n.hidden = true; } }
+
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.09);
+    } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}
+  }
+
+  function addCode(raw) {
+    var code = String(raw || '').trim();
+    if (!code) return false;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].code === code) {
+        var now = Date.now();
+        if (!lastDupToast[code] || now - lastDupToast[code] > 2500) { toast('Sudah ada di daftar: ' + code, 'dup'); lastDupToast[code] = now; }
+        return false;
+      }
+    }
+    items.push({ id: nextId++, code: code, ts: Date.now() });
+    save(); render(items.length - 1);
+    toast('Tersimpan: ' + code, 'ok'); beep();
+    return true;
+  }
+
+  function render(freshIndex) {
+    var list = $('list');
+    list.textContent = '';
+    $('count').textContent = items.length + ' kode';
+    $('btnGen').disabled = items.length === 0;
+    $('btnGen').textContent = items.length ? 'Generate daftar (' + items.length + ')' : 'Generate daftar';
+    if (!items.length) {
+      var e = document.createElement('div'); e.className = 'empty';
+      e.textContent = 'Belum ada kode. Tekan "Ambil foto label" lalu potret QR/barcode pada label. Ulangi untuk label berikutnya.';
+      list.appendChild(e); return;
+    }
+    items.forEach(function (it, idx) {
+      var row = document.createElement('div'); row.className = 'row' + (idx === freshIndex ? ' fresh' : '');
+      var no = document.createElement('div'); no.className = 'no'; no.textContent = idx + 1;
+      var mid = document.createElement('div');
+      var c = document.createElement('div'); c.className = 'code'; c.textContent = it.code;
+      var m = document.createElement('div'); m.className = 'meta'; m.textContent = fmtTime(it.ts);
+      mid.appendChild(c); mid.appendChild(m);
+      var del = document.createElement('button'); del.type = 'button'; del.textContent = 'Hapus'; del.setAttribute('aria-label', 'Hapus ' + it.code);
+      del.addEventListener('click', function () { items = items.filter(function (x) { return x.id !== it.id; }); save(); render(); $('result').hidden = true; });
+      row.appendChild(no); row.appendChild(mid); row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  /* ---------- decoding ---------- */
+  function ensureDetector() {
+    if (detector !== null) return detector;
+    detector = false;
+    try { if ('BarcodeDetector' in window) detector = new BarcodeDetector(); } catch (e) { detector = false; }
+    return detector;
+  }
+
+  function jsqrMulti(cv) {
+    var out = [];
+    if (typeof jsQR !== 'function') return out;
+    var ctx = cv.getContext('2d', { willReadFrequently: true });
+    for (var i = 0; i < 8; i++) {
+      var d = ctx.getImageData(0, 0, cv.width, cv.height);
+      var r = jsQR(d.data, d.width, d.height, { inversionAttempts: 'attemptBoth' });
+      if (!r || !r.data) break;
+      out.push(r.data);
+      var l = r.location;
+      ctx.fillStyle = '#fff'; ctx.beginPath();
+      ctx.moveTo(l.topLeftCorner.x, l.topLeftCorner.y); ctx.lineTo(l.topRightCorner.x, l.topRightCorner.y);
+      ctx.lineTo(l.bottomRightCorner.x, l.bottomRightCorner.y); ctx.lineTo(l.bottomLeftCorner.x, l.bottomLeftCorner.y);
+      ctx.closePath(); ctx.fill();
+    }
+    return out;
+  }
+
+  function drawScaled(src, w, h, maxSide) {
+    var s = Math.min(1, maxSide / Math.max(w, h));
+    canvasEl.width = Math.max(1, Math.round(w * s)); canvasEl.height = Math.max(1, Math.round(h * s));
+    var ctx = canvasEl.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+    ctx.drawImage(src, 0, 0, canvasEl.width, canvasEl.height);
+    return canvasEl;
+  }
+
+  async function decodeSource(src, w, h, sizes) {
+    var found = [];
+    var det = ensureDetector();
+    if (det) {
+      try { var res = await det.detect(src); res.forEach(function (r) { if (r.rawValue) found.push(r.rawValue); }); } catch (e) {}
+    }
+    if (found.length === 0) {
+      for (var i = 0; i < sizes.length && found.length === 0; i++) {
+        found = jsqrMulti(drawScaled(src, w, h, sizes[i]));
+      }
+    }
+    return found;
+  }
+
+  /* ---------- camera ---------- */
+  async function startCam() {
+    note('');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camUnavailable(); return; }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+    } catch (e) { camUnavailable(); return; }
+    var v = $('video'); v.srcObject = stream;
+    try { await v.play(); } catch (e) {}
+    $('stage').classList.add('on'); scanning = true; toast('Kamera aktif. Arahkan ke kode pada label.', '');
+    ensureDetector(); loop();
+  }
+  function camUnavailable() {
+    note('Kamera langsung hanya jalan jika halaman dibuka lewat alamat HTTPS (bukan dari file WhatsApp atau Downloads). Pakai "Ambil foto label" untuk memotret dengan kamera HP, atau "Pilih dari galeri" untuk banyak foto sekaligus.');
+  }
+  function stopCam() {
+    scanning = false;
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    $('stage').classList.remove('on');
+  }
+  async function loop() {
+    var v = $('video');
+    while (scanning) {
+      if (v.readyState >= 2 && v.videoWidth) {
+        try {
+          var codes = await decodeSource(v, v.videoWidth, v.videoHeight, [900]);
+          codes.forEach(addCode);
+        } catch (e) {}
+      }
+      await new Promise(function (r) { setTimeout(r, 160); });
+    }
+  }
+
+  /* ---------- photos ---------- */
+  async function handleFiles(files) {
+    var list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+    note(''); var added = 0, miss = 0;
+    for (var i = 0; i < list.length; i++) {
+      toast('Membaca gambar ' + (i + 1) + ' dari ' + list.length + '...', '');
+      try {
+        var bmp = await createImageBitmap(list[i]);
+        var codes = await decodeSource(bmp, bmp.width, bmp.height, [1600, 800, 2400]);
+        if (bmp.close) bmp.close();
+        if (!codes.length) miss++;
+        codes.forEach(function (c) { if (addCode(c)) added++; });
+      } catch (e) { miss++; }
+    }
+    var msg = added + ' kode baru ditambahkan';
+    if (miss) msg += '. ' + miss + ' gambar tidak terbaca, coba foto lebih dekat dan terang';
+    toast(msg, miss && !added ? 'err' : 'ok');
+  }
+
+  /* ---------- generate & export ---------- */
+  var generated = [];
+  function generate() {
+    if (!items.length) return;
+    generated = items.slice();
+    var body = $('resBody'); body.textContent = '';
+    generated.forEach(function (it, i) {
+      var tr = document.createElement('tr');
+      [[i + 1, 'num'], [it.code, 'mono'], [prodDate(it.code), 'time'], [fmtTime(it.ts), 'time']].forEach(function (c) {
+        var td = document.createElement('td'); td.className = c[1]; td.textContent = c[0]; tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    $('resMeta').textContent = generated.length + ' kode · dibuat ' + fmtTime(Date.now());
+    $('result').hidden = false;
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function csvCell(v) { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function buildRows() { return generated.map(function (it, i) { return [i + 1, it.code, prodDate(it.code), fmtTime(it.ts)]; }); }
+  function stamp() { var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()); }
+  async function saveFile(name, data, mime) {
+    try {
+      if (window.claude && window.claude.use) {
+        var dl = await window.claude.use('downloads');
+        if (dl) { await dl.save({ filename: name, data: data }); return; }
+      }
+    } catch (e) { if (e && e.code === 'declined') return; }
+    try {
+      var blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { toast('Unduhan tidak tersedia di sini. Pakai tombol Salin, atau screenshot tabel.', 'err'); }
+  }
+  async function saveCsv() {
+    var head = ['No', 'Kode', 'Tanggal Produksi (dari kode)', 'Waktu Scan'];
+    var text = '﻿' + [head].concat(buildRows()).map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+    await saveFile('scan-label-' + stamp() + '.csv', text, 'text/csv;charset=utf-8');
+  }
+
+  // Gambar PNG selalu terang (putih) supaya mudah dibagikan lewat WhatsApp atau dicetak.
+  async function savePng() {
+    if (!generated.length) return;
+    try { await Promise.all([document.fonts.load('700 28px "Barlow Condensed"'), document.fonts.load('600 18px "IBM Plex Mono"'), document.fonts.load('400 16px "Barlow"')]); } catch (e) {}
+    var rows = buildRows();
+    var W = 1000, pad0 = 32, headH = 96, thH = 46, rowH = 46, footH = 70;
+    var H = headH + thH + rows.length * rowH + footH;
+    var scale = Math.min(2, 16000 / H);
+    var cv = document.createElement('canvas'); cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
+    var c = cv.getContext('2d'); c.scale(scale, scale);
+    var SANS = '"Barlow", Arial, sans-serif', COND = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif', MONO = '"IBM Plex Mono", Consolas, monospace';
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#0d1117'; c.textBaseline = 'alphabetic';
+    c.font = '700 34px ' + COND; c.fillText('DAFTAR HASIL SCAN LABEL', pad0, 52);
+    c.font = '400 16px ' + SANS; c.fillStyle = '#5b6573';
+    c.fillText(rows.length + ' kode  ·  dibuat ' + fmtTime(Date.now()), pad0, 78);
+    c.fillStyle = '#0d1117'; c.fillRect(pad0, headH - 6, W - pad0 * 2, 3);
+    var X = [pad0 + 10, pad0 + 80, pad0 + 480, pad0 + 700];
+    c.fillStyle = '#f3f5f8'; c.fillRect(pad0, headH, W - pad0 * 2, thH);
+    c.fillStyle = '#0d1117'; c.font = '700 17px ' + COND;
+    ['NO', 'KODE', 'TGL PRODUKSI (DARI KODE)', 'WAKTU SCAN'].forEach(function (t, i) { c.fillText(t, X[i], headH + 30); });
+    c.fillRect(pad0, headH + thH - 2, W - pad0 * 2, 2);
+    rows.forEach(function (r, i) {
+      var y = headH + thH + i * rowH;
+      c.fillStyle = '#d5dae1'; c.fillRect(pad0, y + rowH - 1, W - pad0 * 2, 1);
+      c.fillStyle = '#5b6573'; c.font = '600 18px ' + SANS; c.fillText(String(r[0]), X[0], y + 30);
+      c.fillStyle = '#0d1117'; c.font = '600 18px ' + MONO;
+      var code = String(r[1]), maxW = X[2] - X[1] - 16;
+      while (code.length > 4 && c.measureText(code).width > maxW) code = code.slice(0, -2);
+      if (code !== String(r[1])) code = code.slice(0, -1) + '…';
+      c.fillText(code, X[1], y + 30);
+      c.font = '400 17px ' + SANS; c.fillText(r[2], X[2], y + 30); c.fillText(r[3], X[3], y + 30);
+    });
+    c.fillStyle = '#1d4ed8'; c.fillRect(pad0, H - footH + 22, W - pad0 * 2, 10);
+    var blob = await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
+    if (!blob) { toast('Gagal membuat gambar. Coba lagi atau pakai Unduh CSV.', 'err'); return; }
+    await saveFile('scan-label-' + stamp() + '.png', blob, 'image/png');
+  }
+  async function copyList() {
+    var tsv = [['No', 'Kode', 'Tanggal Produksi', 'Waktu Scan']].concat(buildRows()).map(function (r) { return r.join('\t'); }).join('\n');
+    try { await navigator.clipboard.writeText(tsv); toast('Daftar disalin. Tempel di Excel atau Sheets.', 'ok'); }
+    catch (e) {
+      var ta = document.createElement('textarea'); ta.value = tsv; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e2) {} ta.remove();
+      toast(ok ? 'Daftar disalin. Tempel di Excel atau Sheets.' : 'Salin gagal. Pilih tabel secara manual lalu salin.', ok ? 'ok' : 'err');
+    }
+  }
+
+  /* ---------- wiring ---------- */
+  $('btnCam').addEventListener('click', function () { if (scanning) return; startCam(); });
+  $('btnStop').addEventListener('click', stopCam);
+  $('btnPhoto').addEventListener('click', function () { $('fileIn').click(); });
+  $('btnShot').addEventListener('click', function () { $('shotIn').click(); });
+  $('shotIn').addEventListener('change', function (e) { var f = e.target.files; handleFiles(f).then(function () { e.target.value = ''; }); });
+  $('fileIn').addEventListener('change', function (e) { var f = e.target.files; handleFiles(f).then(function () { e.target.value = ''; }); });
+  $('manualForm').addEventListener('submit', function (e) { e.preventDefault(); var i = $('manualIn'); if (addCode(i.value)) { i.value = ''; } i.focus(); });
+  $('btnGen').addEventListener('click', generate);
+  $('btnCsv').addEventListener('click', saveCsv);
+  $('btnPng').addEventListener('click', savePng);
+  $('btnCopy').addEventListener('click', copyList);
+  $('btnBack').addEventListener('click', function () { $('result').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  var armClear = false;
+  $('btnClear').addEventListener('click', function () {
+    var b = $('btnClear');
+    if (!items.length) return;
+    if (!armClear) { armClear = true; b.textContent = 'Yakin? Ketuk lagi'; setTimeout(function () { armClear = false; b.textContent = 'Kosongkan'; }, 3000); return; }
+    armClear = false; b.textContent = 'Kosongkan'; items = []; save(); render(); $('result').hidden = true; toast('Antrean dikosongkan.', '');
+  });
+  window.addEventListener('pagehide', stopCam);
+
+  load(); render();
+})();
+</script>
